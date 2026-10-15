@@ -13,7 +13,6 @@ The LiDAR keeps the robot driving straight and parallel to the walls, stops it a
 ## Contents
 
 - [Files in this repository](#files-in-this-repository)
-- [Hardware and software](#hardware-and-software)
 - [Quick start](#quick-start)
 - [How it works](#how-it-works)
 - [Parameters you may need to change](#parameters-you-may-need-to-change)
@@ -37,26 +36,12 @@ The three smaller files are cut out of `maze_explorer.py` and use the same logic
 
 ---
 
-## Hardware and software
-
-**Robot: Yahboom MicroROS X**
-
-| Part | Role |
-| --- | --- |
-| ESP32-S3 board running micro-ROS | Drives the motors, reads the encoders and IMU, talks to the computer over Wi-Fi |
-| ORBBEC MS200 LiDAR (360°, TOF) | Measures the distance to the walls all around the robot (`/scan`) |
-| 4 geared motors with Hall encoders + IMU | Movement and odometry (`/odom`) |
-
-**Computer**
-
-- Ubuntu with **ROS 2 Humble** (PC or virtual machine)
-- Yahboom packages from the course: `yahboomcar_bringup`, `yahboomcar_nav` (Gmapping, RViz, save map)
-- Python 3 with `rclpy` and `numpy` (`pip install numpy` if missing)
 
 **Maze**
 
 - 10 × 10 cells, thin wall panels, corridors **30 cm or 40 cm** wide (measured automatically)
 - Walls at right angles; flat floor
+  
 
 **Topics used**
 
@@ -258,6 +243,4 @@ The status line printed every second helps a lot:
 
 ## References
 
-- [FRA641 TurtleBot Maze-Solving, HCI Lab](https://hcilab.net/class-project/fra-641-computer-programming-for-robotics/turltebot-maze-solving/): the right-wall-follower auto-mapping project this work is based on
-- Yahboom Tutorial-RoboRescue-with-microROS: ROS Python Basic and LiDAR Course (P7-2 to P7-7)
 - [Yahboom MicroROS ESP32 Robot specifications](https://rcdrone.top/products/yahboom-microros-esp32-robot)

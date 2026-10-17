@@ -15,7 +15,7 @@ def clamp(v, lo, hi):
 
 class WallAvoider:
     def __init__(self, cell=0.30, front_gap=0.02, robot_half_width=0.08, robot_front=0.10,
-                 safe_margin=0.02, k_avoid=6.0, safe_speed=0.03, turn_speed=0.5,
+                 safe_margin=0.02, k_avoid=6.0, safe_speed=0.05, turn_speed=0.5,
                  ignore_below=0.08, lidar_front_deg=0.0, lidar_ccw=True, logger=None):
         self.half_w = robot_half_width
         self.robot_front = robot_front
@@ -80,7 +80,7 @@ class WallAvoidanceDemo(Node):
         p('robot_front', 0.10)
         p('safe_margin', 0.02)
         p('k_avoid', 6.0)
-        p('safe_speed', 0.03)
+        p('safe_speed', 0.05)
         p('lidar_front_deg', 0.0)
         p('lidar_ccw', True)
         g = lambda n: self.get_parameter(n).value

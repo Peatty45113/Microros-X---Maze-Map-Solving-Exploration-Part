@@ -6,7 +6,7 @@ The robot explores an unknown 10 × 10 maze with the **right-wall-follower** rul
 
 The LiDAR keeps the robot driving straight and parallel to the walls, stops it at the centre of each junction, and steers it away from walls, so the map stays clean even when the wheels slip.
 
-> **Status:** tested in a simulation of our 10 × 10 maze (30 cm and 40 cm corridors, with wheel slip, odometry error and Wi-Fi delay). On the real robot, v4 was tested; v5 (junction centring) still needs a full real-robot run.
+> **Status:** tested in a simulation of our 10 × 10 maze (30 cm and 40 cm corridors, with wheel slip, odometry error and Wi-Fi delay). On the real robot, v4 was tested.
 
 ---
 
@@ -174,7 +174,7 @@ The centring push (P controller, Kp = 2.5) is limited to 0.10 rad/s, smaller tha
 The robot looks along the line of the side wall, finds the gap (the junction opening) and computes its midpoint. It slows down as it gets close and subtracts the distance it travels during the Wi-Fi delay (`sensor_delay`). When voting, a side counts as open only if there is really no wall beside the robot, so it does not ask again after passing a junction.
 
 **4. Wall avoidance** (`safe_cmd`, also in `lidar_wall_avoidance.py`)
-A box as wide as the robot plus 2 cm on each side sits in front of it (20 cm × 16 cm for 30 cm corridors). If a LiDAR point falls inside, the robot slows to 0.03 m/s and turns away, harder the deeper the wall intrudes: `0.2 + 6 × depth` rad/s. Walls running parallel beside the robot are outside the box, so normal driving is not disturbed.
+A box as wide as the robot plus 2 cm on each side sits in front of it (20 cm × 16 cm for 30 cm corridors). If a LiDAR point falls inside, the robot slows to 0.05 m/s and turns away, harder the deeper the wall intrudes: `0.2 + 6 × depth` rad/s. Walls running parallel beside the robot are outside the box, so normal driving is not disturbed.
 
 ---
 
@@ -185,7 +185,7 @@ Pass any of these with `--ros-args -p name:=value`.
 | Parameter | Default | Change it when |
 | --- | --- | --- |
 | `cell_size` | `0.0` (measure) | You know the corridor width: `0.30` or `0.40` |
-| `linear_speed` | `0.08` m/s | Faster or slower driving (slow makes a sharper map) |
+| `linear_speed` | `0.15` m/s | Faster or slower driving (slow makes a sharper map) |
 | `sensor_delay` | `0.2` s | Robot still stops **past** the junction centre → `0.3`; stops **before** it → `0.1` |
 | `lidar_offset_x` | `0.0` m | The LiDAR is not above the robot's turning centre (e.g. 3 cm in front → `0.03`) |
 | `robot_half_width` | `0.08` m | Your robot is wider than 16 cm (use half its width) |

@@ -237,7 +237,6 @@ The status line printed every second helps a lot:
 | v2 | Relative turns added up errors; robot looped in one corner | Turns measured against the maze grid (multiples of 90°) |
 | v3 | Hit walls when driving crooked | LiDAR wall-avoidance layer |
 | v4 | Still drove crooked; turns and U-turns not straight | LiDAR wall-angle measurement, re-align after every turn, U-turn = 2 × 90°, 30/40 cm corridors |
-| v5 | Stopped a little past junctions; asked again at the next wall | LiDAR junction-centre detection, Wi-Fi delay compensation, "side really clear" check |
 
 ---
 

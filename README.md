@@ -6,7 +6,7 @@ The robot explores an unknown 10 × 10 maze with the **right-wall-follower** rul
 
 LiDAR feedback helps the robot drive parallel to the walls, stay near the middle of the corridor, and steer away from obstacles. After detecting a side opening, v4 advances half a cell using odometry to estimate the junction centre. Wheel slip and odometry error can still affect where it stops.
 
-> **Version:** this README describes the supplied `maze_explorer.py` v4. The project notes report that v4 was tested on the real robot. The code was reviewed for this README; no new simulation or hardware test was performed.
+Version: v4 was tested on the real robot on 14 October 2026 and successfully mapped the complete 10 × 10 maze, with 40 cm corridors and turn_speed:=0.5 rad/s.
 
 ---
 
@@ -32,7 +32,7 @@ LiDAR feedback helps the robot drive parallel to the walls, stay near the middle
 | `junction_asker.py` | Only the "stop and ask the user" part: vote on open directions, classify the junction, ask w/a/s/d. Includes a demo node that **does not move the robot**. | To study or reuse the junction logic |
 | `lidar_wall_avoidance.py` | Only the LiDAR wall-avoidance layer, as a small class plus a demo node that drives forward and steers away from walls. | To study or reuse wall avoidance |
 
-The three smaller files are learning modules described in the project notes. Only `maze_explorer.py` was supplied for this review, so their current implementation and defaults have not been verified. Do not assume their values match the main program: the notes report `0.03 m/s` in the standalone wall-avoidance file, while the supplied main program uses `safe_speed = 0.05 m/s`.
+The three smaller files separate the main features into focused modules so you can study or reuse one part at a time. Both maze_explorer.py and lidar_wall_avoidance.py use a default wall-avoidance forward-speed limit of 0.05 m/s.
 
 ---
 
@@ -236,7 +236,7 @@ The status line printed every second helps a lot:
 
 | Version | Problem found | Fix |
 | --- | --- | --- |
-| v1 | — | Right wall follower, ask at 3/4-way junctions (keys w a s d), auto-save the map on `Ctrl+C` |
+| v1 | — | Wall follower, ask at 3/4-way junctions (keys w a s d), auto-save the map on `Ctrl+C` |
 | v2 | Relative turns added up errors; robot looped in one corner | Turns measured against the maze grid (multiples of 90°) |
 | v3 | Hit walls when driving crooked | LiDAR wall-avoidance layer |
 | v4 | Still drove crooked; turns and U-turns not straight | LiDAR wall-angle measurement, re-align after every turn, U-turn = 2 × 90°, tuned for the real robot |

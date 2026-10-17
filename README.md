@@ -73,7 +73,7 @@ ros2 launch yahboomcar_nav map_gmapping_launch.py
 
 # T5 - the maze explorer
 python3 maze_explorer.py                                   # measures the corridor width itself
-python3 maze_explorer.py --ros-args -p cell_size:=0.40     # or tell it: 40 cm corridors
+python3 maze_explorer.py -ros-args -p cell_size:=0.40 -p turn_speed:=0.5     # or tell it: 40 cm corridors
 ```
 
 **Before you start T5:** put the robot between two walls, roughly facing along the corridor. It may be tilted by up to about 20°; it straightens itself with the LiDAR before driving.

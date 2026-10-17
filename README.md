@@ -1,12 +1,12 @@
 # MicroROS X Maze Explorer
 
-Autonomous maze mapping for the **Yahboom MicroROS X** robot with **ROS 2** and **LiDAR**.
+Interactive maze exploration and mapping for the **Yahboom MicroROS X** robot with **ROS 2** and **LiDAR**.
 
 The robot explores an unknown 10 × 10 maze with the **right-wall-follower** rule while **Gmapping** builds the map. At every 3-way or 4-way junction it stops and asks you which way to go, then saves the map automatically when you press `Ctrl+C` at the goal.
 
-The LiDAR keeps the robot driving straight and parallel to the walls, stops it at the centre of each junction, and steers it away from walls, so the map stays clean even when the wheels slip.
+LiDAR feedback helps the robot drive parallel to the walls, stay near the middle of the corridor, and steer away from obstacles. After detecting a side opening, v4 advances half a cell using odometry to estimate the junction centre. Wheel slip and odometry error can still affect where it stops.
 
-> **Status:** tested in a simulation of our 10 × 10 maze (30 cm and 40 cm corridors, with wheel slip, odometry error and Wi-Fi delay). On the real robot, v4 was tested.
+> **Version:** this README describes the supplied `maze_explorer.py` v4. The project notes report that v4 was tested on the real robot. The code was reviewed for this README; no new simulation or hardware test was performed.
 
 ---
 
@@ -27,12 +27,12 @@ The LiDAR keeps the robot driving straight and parallel to the walls, stops it a
 
 | File | What it is | When to use it |
 | --- | --- | --- |
-| `maze_explorer.py` | **The full program.** Right wall follower + asks you at junctions + LiDAR heading control + wall avoidance + saves the map on `Ctrl+C`. Every line has a Thai comment. | The main program for mapping the maze |
-| `right_wall_follower.py` | The same driving code **without** the junction questions and map saving. The robot always follows the right-hand rule by itself. | Fully autonomous runs, or to study the driving logic alone |
+| `maze_explorer.py` | **The full program.** Right wall follower + asks you at junctions + LiDAR heading control + wall avoidance + saves the map on `Ctrl+C`. Includes extensive Thai comments. | The main program for mapping the maze |
+| `right_wall_follower.py` | A standalone right-wall-following program, described by the project as running without junction questions or map saving. The robot always follows the right-hand rule by itself. | Fully autonomous runs, or to study the driving logic alone |
 | `junction_asker.py` | Only the "stop and ask the user" part: vote on open directions, classify the junction, ask w/a/s/d. Includes a demo node that **does not move the robot**. | To study or reuse the junction logic |
 | `lidar_wall_avoidance.py` | Only the LiDAR wall-avoidance layer, as a small class plus a demo node that drives forward and steers away from walls. | To study or reuse wall avoidance |
 
-The three smaller files are cut out of `maze_explorer.py` and use the same logic and default values, so you can learn one part at a time.
+The three smaller files are learning modules described in the project notes. Only `maze_explorer.py` was supplied for this review, so their current implementation and defaults have not been verified. Do not assume their values match the main program: the notes report `0.03 m/s` in the standalone wall-avoidance file, while the supplied main program uses `safe_speed = 0.05 m/s`.
 
 ---
 
@@ -73,10 +73,10 @@ ros2 launch yahboomcar_nav map_gmapping_launch.py
 
 # T5 - the maze explorer
 python3 maze_explorer.py                                   # measures the corridor width itself
-python3 maze_explorer.py -ros-args -p cell_size:=0.40 -p turn_speed:=0.5     # or tell it: 40 cm corridors
+python3 maze_explorer.py --ros-args -p cell_size:=0.40 -p turn_speed:=0.5     # or tell it: 40 cm corridors
 ```
 
-**Before you start T5:** put the robot between two walls, roughly facing along the corridor. It may be tilted by up to about 20°; it straightens itself with the LiDAR before driving.
+**Before you start T5:** put the robot between two walls, roughly facing along the corridor. The program first estimates the corridor width, then attempts to align with the walls using LiDAR. Alignment ends when the error is below 1.5°, when wall-angle data is unavailable, or after the 3-second timeout.
 
 **At a junction** the terminal shows:
 
@@ -96,7 +96,7 @@ python3 maze_explorer.py -ros-args -p cell_size:=0.40 -p turn_speed:=0.5     # o
 
 Type `w` (forward), `a` (left), `d` (right) or `s` (back) and press Enter. Pressing Enter alone uses the right-hand rule.
 
-**At the goal** press `Ctrl+C` once in T5 and wait. The robot stops, then the map is saved with `ros2 launch yahboomcar_nav save_map_launch.py` (`yahboom_map.pgm` / `.yaml`), plus a time-stamped backup map and a route log. **Keep T4 (Gmapping) running until the map is saved.**
+**At the goal** press `Ctrl+C` once in T5 and wait. The robot sends stop commands, then attempts to save the map with `ros2 launch yahboomcar_nav save_map_launch.py` (`yahboom_map.pgm` / `.yaml`), With the default `save_method:=both`, it also runs `nav2_map_server map_saver_cli` for a time-stamped map and writes a route log. Check the terminal output to confirm each map-saving command succeeded. **Keep T4 (Gmapping) running until the map is saved.**
 
 **Other programs**
 
@@ -114,19 +114,19 @@ python3 lidar_wall_avoidance.py                 # drives slowly forward and stee
 
 ```mermaid
 flowchart LR
-    R[MicroROS X<br/>ESP32 + MS200 LiDAR] -- Wi-Fi --> A[micro-ROS Agent]
+    R["MicroROS X with LiDAR"] -- Wi-Fi --> A[micro-ROS Agent]
     A -- /scan, /odom --> G[Gmapping SLAM] -- /map --> V[RViz]
     A -- /scan, /odom --> N[maze_explorer.py]
     K[Keyboard w a s d] --> N
     N -- /cmd_vel --> A
-    N -- Ctrl+C --> S[save_map_launch.py<br/>yahboom_map.pgm / .yaml]
+    N -- Ctrl+C --> S["Map files and route log"]
 ```
 
 Inside `maze_explorer.py`, a timer runs `loop()` **20 times per second**. Each loop:
 
 1. Measures distances (front, left, right) and **the robot's angle to the walls** from the latest LiDAR scan.
 2. Runs one step of the **state machine** below.
-3. Computes a speed command, passes it through the **wall-avoidance layer**, and publishes it to `/cmd_vel`.
+3. Publishes a speed command to `/cmd_vel`. Forward motion in `FOLLOW`, `ADVANCE`, and `EXIT` passes through the **wall-avoidance layer**; in-place turning and alignment publish their rotation commands directly.
 
 ### State machine
 
@@ -136,45 +136,45 @@ stateDiagram-v2
     ALIGN --> FOLLOW: straight (start)
     FOLLOW --> ADVANCE: junction opening seen
     FOLLOW --> DECIDE: wall ahead
-    ADVANCE --> DECIDE: at junction centre
+    ADVANCE --> DECIDE: half-cell distance or wall ahead
     DECIDE --> ASK: 3-way / 4-way
     DECIDE --> TURN: dead end / corner
     DECIDE --> EXIT: straight on
     ASK --> TURN: a / d / s
     ASK --> EXIT: w
-    TURN --> ALIGN: odom says 90° done
+    TURN --> ALIGN: grid turn target reached
     ALIGN --> EXIT: straight (after a turn)
     ALIGN --> TURN: 2nd half of a U-turn
     EXIT --> FOLLOW: 1 cell out
-    EXIT --> ADVANCE: next cell is a junction
+    EXIT --> DECIDE: wall ahead or opening after one cell
 ```
 
 | State | What the robot does |
 | --- | --- |
-| `ALIGN` | Rotates in place until the LiDAR says it is parallel to the walls (within 1.5°). Used at the start and after every turn. |
+| `ALIGN` | Attempts to align within 1.5° using LiDAR. Continues if the angle is unavailable or the 3 s timeout is exceeded. Used at startup and after each turn step. |
 | `FOLLOW` | Drives along the middle of the corridor, parallel to the walls. |
-| `ADVANCE` | Slows down into the exact centre of a junction. |
-| `DECIDE` | Straightens up, waits 0.3 s, then looks left/front/right 10 times and votes on which ways are open. |
+| `ADVANCE` | Drives another `cell_size / 2` from the detected opening, measured by displacement from the segment start in odometry. Stops earlier if the front wall is close. Uses heading control and wall avoidance; there is no distance-based deceleration to the junction centre. |
+| `DECIDE` | Straightens up, waits 0.3 s, then checks left/front/right over 10 control ticks and uses a strict majority vote. These ticks may reuse the latest scan. |
 | `ASK` | 3-way or 4-way junction: waits for your key press. |
-| `TURN` | Turns 90° in place using odometry. A U-turn is two 90° turns with `ALIGN` in between. |
-| `EXIT` | Drives one cell out of the junction, ignoring side openings, so the same junction is not asked twice. |
+| `TURN` | Rotates toward a target 90° from the nearest estimated maze-grid heading, using odometry and a 3° target tolerance. A U-turn uses two right-turn steps with `ALIGN` between them. |
+| `EXIT` | Drives one cell before considering side openings again. A front wall causes an earlier `DECIDE`; after one cell, an open side leads directly to `DECIDE`, otherwise it returns to `FOLLOW`. |
 
 **Right-hand rule** (used whenever the robot decides by itself, or when you just press Enter): right → forward → left → back.
 
-### The four ideas that make the real robot accurate
+### Four control mechanisms in v4
 
 **1. Measuring the angle to the walls with the LiDAR** (`lidar_heading_error`, `wall_score`)
-Odometry drifts when the wheels slip, so the robot measures its angle from the walls instead. It rotates the LiDAR points by test angles from −30° to +30° and counts how many points fall into the same 1 cm "row". At the correct angle the points of every wall line up, so the score is highest. Using all walls at once makes this robust to corners and wall ends. Resolution: 0.1°.
+Odometry drifts when the wheels slip, so the robot measures its angle from the walls instead. It rotates the LiDAR points by test angles from −30° to +30° and counts how many points fall into the same 1 cm "row". At the correct angle the points of every wall line up, so the score is highest. Using all walls at once makes this robust to corners and wall ends. The search uses 1° coarse steps and 0.1° refinement steps; these are search increments, not a guarantee of physical accuracy.
 
 **2. Driving straight and centred** (`wall_follow_w`)
 `turn speed = centring push + 1.5 × wall angle`
 The centring push (P controller, Kp = 2.5) is limited to 0.10 rad/s, smaller than the angle correction, so the robot drifts back to the centre while staying parallel instead of driving diagonally.
 
-**3. Stopping at the junction centre** (`junction_remaining`, `side_clear`)
-The robot looks along the line of the side wall, finds the gap (the junction opening) and computes its midpoint. It slows down as it gets close and subtracts the distance it travels during the Wi-Fi delay (`sensor_delay`). When voting, a side counts as open only if there is really no wall beside the robot, so it does not ask again after passing a junction.
+**3. Estimating the junction position with odometry** (`ADVANCE`, `traveled`)
+A side is considered open when its measured distance exceeds `cell_size`. After three consecutive open control ticks, the robot records its position and enters `ADVANCE`. It drives another half cell (15 cm for a 30 cm corridor, or 20 cm for a 40 cm corridor), or stops earlier if the front distance is below `cell_size / 2 + front_gap`. This estimates the centre; v4 does not locate the opening midpoint from LiDAR geometry or compensate for sensor delay. `DECIDE` then attempts alignment, waits, and votes on open directions. The way count includes the route behind the robot.
 
 **4. Wall avoidance** (`safe_cmd`, also in `lidar_wall_avoidance.py`)
-A box as wide as the robot plus 2 cm on each side sits in front of it (20 cm × 16 cm for 30 cm corridors). If a LiDAR point falls inside, the robot slows to 0.05 m/s and turns away, harder the deeper the wall intrudes: `0.2 + 6 × depth` rad/s. Walls running parallel beside the robot are outside the box, so normal driving is not disturbed.
+A box as wide as the robot plus 2 cm on each side sits in front of it (20 cm × 16 cm for 30 cm corridors). If a LiDAR point falls inside, the robot caps forward speed at 0.05 m/s and turns away, harder the deeper the wall intrudes: `0.2 + 6 × depth` rad/s. The turn command is capped by `turn_speed`. If a detected point is closer than `robot_front + 0.01` (11 cm by default) in the forward direction, forward speed becomes zero while the robot turns away. Walls outside the box do not trigger this layer.
 
 ---
 
@@ -185,14 +185,17 @@ Pass any of these with `--ros-args -p name:=value`.
 | Parameter | Default | Change it when |
 | --- | --- | --- |
 | `cell_size` | `0.0` (measure) | You know the corridor width: `0.30` or `0.40` |
-| `linear_speed` | `0.15` m/s | Faster or slower driving (slow makes a sharper map) |
-| `sensor_delay` | `0.2` s | Robot still stops **past** the junction centre → `0.3`; stops **before** it → `0.1` |
-| `lidar_offset_x` | `0.0` m | The LiDAR is not above the robot's turning centre (e.g. 3 cm in front → `0.03`) |
+| `linear_speed` | `0.15` m/s | Adjust the requested forward speed |
+| `turn_speed` | `0.8` rad/s | Adjust the turn-speed limit; the quick-start example uses `0.5` |
+| `safe_speed` | `0.05` m/s | Adjust the forward-speed cap during wall avoidance |
+| `front_gap` | `0.02` m | Adjust the front-stop threshold: half a cell plus this gap |
 | `robot_half_width` | `0.08` m | Your robot is wider than 16 cm (use half its width) |
 | `lidar_ccw` | `true` | Left and right are swapped (see Troubleshooting) |
 | `lidar_front_deg` | `0.0` | The LiDAR is mounted rotated (try `180`) |
 | `ask_min_ways` | `3` | `2` = also ask at corners, `5` = never ask |
 | `use_safety` | `true` | Set `false` to test without the wall-avoidance layer |
+| `save_method` | `both` | `launch`, `cli`, or `both` map-saving methods |
+| `map_dir` | `~/yahboomcar_ws/src/yahboomcar_nav/maps` | Directory for the time-stamped CLI map and route log; falls back to `~/maze_maps` if its parent does not exist |
 | `beep_on_ask` | `false` | Beep when the robot asks (check `/beep` with the course's beep test first) |
 
 ---
@@ -204,17 +207,17 @@ Pass any of these with `--ros-args -p name:=value`.
 | Robot does not move | Is the micro-ROS Agent (T1) connected? Does `ros2 topic echo /scan` show data? |
 | Robot turns the wrong way / left and right swapped | Rotate the robot to the left by hand and watch `ang=` in the status line: it should become **negative**. If not, run with `-p lidar_ccw:=false`. |
 | Robot drives crooked | Look at `pts=` in the status line. Fewer than about 10 means the LiDAR cannot see the walls clearly. |
-| Stops a little past the junction and asks late | Increase `sensor_delay` to `0.3`; set `lidar_offset_x` if the LiDAR is not at the turning centre. |
+| Stops away from the junction centre | Check `cell_size`, wheel slip, and odometry. v4 advances a fixed half cell after detecting the opening; it has no sensor-delay or LiDAR-offset compensation parameter. |
 | Map not saved after `Ctrl+C` | T4 (Gmapping) must still be running. Press `Ctrl+C` only once and wait. If `ros2` is "not found", source ROS 2 in T5. |
-| Measured corridor width looks wrong | Pass it directly: `-p cell_size:=0.30`. |
+| Measured corridor width looks wrong | Pass it directly: `--ros-args -p cell_size:=0.30`. |
 
 The status line printed every second helps a lot:
 
 ```
-[FOLLOW ] F=0.45 L=0.15 R=0.16 ang= +0.8 pts=31 junc=+12cm
+[FOLLOW ] F=0.45 L=0.15 R=0.16 ang= +0.8 pts=31
 ```
 
-`F/L/R` = free distance front/left/right (m), `ang` = angle to the walls (°), `pts` = points on the best wall line, `junc` = distance left to the junction centre.
+`F/L/R` = free distance front/left/right (m), `ang` = angle to the walls (°), `pts` = points on the best wall line. There is no junction-distance field in v4.
 
 ---
 
@@ -225,7 +228,7 @@ The status line printed every second helps a lot:
 3. **`lidar_wall_avoidance.py`.** The smallest complete example: read `/scan`, make a decision, publish `/cmd_vel`.
 4. **`junction_asker.py`.** Voting, classifying junctions, and reading the keyboard in a thread without blocking the robot.
 5. **`right_wall_follower.py`.** The whole driving state machine without user interaction.
-6. **`maze_explorer.py`.** Everything together. Read it with the Thai comments; lines marked ★ keep the robot parallel to the walls and lines marked ◆ find the junction centre.
+6. **`maze_explorer.py`.** Everything together. Read it with the Thai comments; lines marked ★ explain LiDAR wall-angle control. Study `ADVANCE` and `traveled()` for the odometry-based half-cell advance.
 
 ---
 
@@ -239,6 +242,13 @@ The status line printed every second helps a lot:
 | v4 | Still drove crooked; turns and U-turns not straight | LiDAR wall-angle measurement, re-align after every turn, U-turn = 2 × 90°, tuned for the real robot |
 
 ---
+
+## Implementation limits
+
+- The right-hand rule is a local direction priority. This program does not maintain a visited-cell graph, plan a shortest path, or guarantee full maze coverage. Gmapping builds the map in a separate process.
+- A manual direction that LiDAR reports as blocked produces a warning but is still executed.
+- The control loop does not check scan freshness. When odometry has not updated for more than 0.5 s, it estimates motion from the last commanded velocities; this is not measured wheel motion.
+- The robot does not detect the goal automatically. The operator ends the run with `Ctrl+C`. The shutdown handler also attempts map saving after a caught runtime exception.
 
 ## References
 
